@@ -31,6 +31,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import sys
 import textwrap
 import numpy as np
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps, PngImagePlugin
@@ -47,6 +48,16 @@ TILE_LABELS = [
     "bot_right",
 ]
 
+# File-path status chatter goes through _log() so --quiet keeps stdout clean
+# while --json results still print.
+QUIET = False
+
+
+def _log(*args, **kwargs):
+  if not QUIET:
+    print(*args, **kwargs)
+
+
 # Single source-of-truth optical telemetry thresholds
 NEON_SAT_THRESHOLD = 230
 NEON_CLIP_PCT_LIMIT = 3.5
@@ -56,6 +67,10 @@ CRUSHED_SHADOW_LIMIT = 6.0
 SOFT_FOCUS_THRESHOLD = 45.0
 WAXY_FLOOR_DEFAULT = 1.60
 WAXY_FLOOR_MACRO = 1.15
+# Expected mean |pixel - 3x3 mean| for white noise of sigma 1 is sqrt(2/pi)*sqrt(8/9).
+MICROTEXTURE_GRAIN_GAIN = 0.752
+# Above this share of noise-explained micro-texture, the residual is grain, not detail.
+NOISE_MASQUERADE_THRESHOLD = 0.85
 
 
 def _tile_box(w: int, h: int, idx: int) -> tuple[int, int, int, int]:
@@ -82,7 +97,12 @@ def _parse_tile_indices(spec: str | list[str]) -> list[int]:
     tok = tok.strip()
     if not tok:
       continue
-    idx = int(tok)
+    try:
+      idx = int(tok)
+    except ValueError:
+      raise ValueError(
+          f"Tile index must be an integer 0..8, got {tok!r}"
+      ) from None
     if not (0 <= idx <= 8):
       raise ValueError(f"Tile index must be 0..8, got {idx}")
     indices.append(idx)
@@ -154,6 +174,57 @@ def _compute_laplacian_variance(gray_arr: np.ndarray) -> float:
   return float(np.var(lap))
 
 
+def _estimate_noise_sigma(gray_arr: np.ndarray) -> float:
+  """
+    Estimates additive white-noise sigma with the Immerkaer (1996) Laplacian-kernel
+    estimator. Its 3x3 kernel has zero response to locally linear intensity ramps,
+    so it isolates stochastic pixel noise from real scene structure.
+
+    Returns 0.0 for patches too small to estimate from.
+    """
+  g = gray_arr.astype(np.float32)
+  if g.shape[0] < 3 or g.shape[1] < 3:
+    return 0.0
+  lap_abs = np.abs(
+      g[:-2, :-2] + g[2:, 2:] + g[:-2, 2:] + g[2:, :-2]
+      - 2.0 * (g[:-2, 1:-1] + g[2:, 1:-1] + g[1:-1, :-2] + g[1:-1, 2:])
+      + 4.0 * g[1:-1, 1:-1]
+  )
+  n = (g.shape[0] - 2) * (g.shape[1] - 2)
+  return float(np.sum(lap_abs) * np.sqrt(np.pi / 2.0) / (6.0 * n))
+
+
+def _compute_structural_sharpness(gray_arr: np.ndarray) -> dict:
+  """
+    Noise-compensated focus metric.
+
+    Raw Laplacian variance cannot tell focus from pixel noise: a field of pure
+    grain outranks a real photograph. This estimates the noise floor that the
+    Laplacian kernel would produce from stochastic grain alone and reports only
+    the *excess* variance attributable to scene structure.
+
+    Returns:
+      structural_sharpness : noise-compensated sharpness (the value to threshold on)
+      noise_sigma          : estimated grain amplitude (0-255 scale)
+      noise_floor          : Laplacian variance explained by that grain
+      noise_fraction       : noise_floor / raw variance (->1.0 means "all noise")
+      raw_laplacian_var    : the legacy, uncompensated number
+    """
+  raw = _compute_laplacian_variance(gray_arr)
+  sigma = _estimate_noise_sigma(gray_arr)
+  # A Laplacian kernel of this shape has squared response 20*sigma^2 per pixel.
+  noise_floor = 20.0 * sigma * sigma
+  excess = max(0.0, raw - noise_floor)
+  noise_fraction = (noise_floor / raw) if raw > 1e-9 else 0.0
+  return {
+      "structural_sharpness": float(excess),
+      "noise_sigma": float(sigma),
+      "noise_floor": float(noise_floor),
+      "noise_fraction": float(min(1.0, noise_fraction)),
+      "raw_laplacian_var": float(raw),
+  }
+
+
 def _compute_microtexture_score(gray_arr: np.ndarray) -> float | None:
   """
     Measures fine micro-texture (pore/grain residual) in smooth midtone patches.
@@ -161,6 +232,9 @@ def _compute_microtexture_score(gray_arr: np.ndarray) -> float | None:
     are insufficient for a reliable measurement.
     Note: Edge-residual energy alone cannot distinguish intentionally smooth matte surfaces
     (ceramics, anodized metal) from over-denoised plastic skin without semantic context.
+
+    The residual is NOT noise-compensated here: callers that want grain removed should
+    use _compute_microtexture_metrics(), which reports the structural excess.
     """
   g = gray_arr.astype(np.float32)
   if g.shape[0] < 16 or g.shape[1] < 16:
@@ -187,6 +261,34 @@ def _compute_microtexture_score(gray_arr: np.ndarray) -> float | None:
   if int(np.sum(mask)) < 200:
     return None
   return float(np.mean(residual[mask]))
+
+
+def _compute_microtexture_metrics(gray_arr: np.ndarray) -> dict | None:
+  """
+    Micro-texture with a stochastic-grain floor removed.
+
+    The 3x3 mean residual used by _compute_microtexture_score() also responds to
+    sensor noise: pure grain scored 10.55 there, i.e. "more textured" than a real
+    portrait. For white noise of sigma s the expected mean absolute deviation of a
+    pixel from its 3x3 mean is s * sqrt(2/pi) * sqrt(1 - 1/9) ~= 0.752 * s, so that
+    much of the residual is explicable by grain alone and is subtracted.
+
+    Returns None when the raw score is undefined.
+    """
+  raw = _compute_microtexture_score(gray_arr)
+  if raw is None:
+    return None
+  sigma = _estimate_noise_sigma(gray_arr)
+  grain_floor = MICROTEXTURE_GRAIN_GAIN * sigma
+  return {
+      "raw": float(raw),
+      "noise_sigma": float(sigma),
+      "grain_floor": float(grain_floor),
+      "structural": float(max(0.0, raw - grain_floor)),
+      "noise_fraction": float(
+          min(1.0, grain_floor / raw) if raw > 1e-9 else 0.0
+      ),
+  }
 
 
 def compute_optical_telemetry(image_path: str) -> dict:
@@ -242,19 +344,45 @@ def compute_optical_telemetry(image_path: str) -> dict:
   else:
     interior_crushed_pct = float(np.mean(interior_gray < 6) * 100.0)
 
-  # 2. Sharpness (Global + 3x3 Per-Tile Laplacian Variance)
-  global_sharpness = _compute_laplacian_variance(gray_arr)
+  # 2. Sharpness (Global + 3x3 Per-Tile), noise-compensated.
+  # Raw Laplacian variance is dominated by pixel grain: a field of pure noise used
+  # to outscore a real photograph ~5:1. Tile scores below are the structural excess
+  # over the grain floor, so this number tracks focus instead of high-frequency energy.
+  global_sharp_metrics = _compute_structural_sharpness(gray_arr)
+  global_sharpness = global_sharp_metrics["structural_sharpness"]
+  raw_global_sharpness = global_sharp_metrics["raw_laplacian_var"]
+  noise_sigma = global_sharp_metrics["noise_sigma"]
+  noise_floor = global_sharp_metrics["noise_floor"]
+  noise_fraction = global_sharp_metrics["noise_fraction"]
+
   tile_sharpness = {}
+  tile_raw_sharpness = {}
+  tile_noise_sigma = {}
+  # Noise is spatially stationary, so every tile is compensated with the global
+  # sigma. Estimating sigma per tile makes the floor itself noisy on small
+  # patches and lets a lucky tile sneak over SOFT_FOCUS_THRESHOLD.
+  uniform_noise_floor = 20.0 * noise_sigma * noise_sigma
   for idx in range(9):
     x0, y0, x1, y1 = _tile_box(w, h, idx)
-    t_var = _compute_laplacian_variance(gray_arr[y0:y1, x0:x1])
-    tile_sharpness[f"tile_{idx}_{TILE_LABELS[idx]}"] = round(t_var, 1)
+    t_raw = _compute_laplacian_variance(gray_arr[y0:y1, x0:x1])
+    t_key = f"tile_{idx}_{TILE_LABELS[idx]}"
+    tile_sharpness[t_key] = round(max(0.0, t_raw - uniform_noise_floor), 1)
+    tile_raw_sharpness[t_key] = round(t_raw, 1)
+    tile_noise_sigma[t_key] = round(noise_sigma, 2)
 
   sharp_vals = list(tile_sharpness.values())
   peak_tile_name = max(tile_sharpness, key=tile_sharpness.get)
   peak_sharpness = max(sharp_vals)
-  min_sharpness = max(0.1, min(sharp_vals))
-  focus_separation_ratio = round(peak_sharpness / min_sharpness, 2)
+  # Separating sharp subject from smooth background must not divide by a zeroed tile:
+  # after noise compensation a flat tile scores exactly 0, which produced absurd
+  # ratios (10521x) and made the waxy-floor branch meaningless. Compare the peak
+  # against the MEDIAN of the other eight tiles instead, floored at 1.0.
+  other_vals = sorted(
+      v for k, v in tile_sharpness.items() if k != peak_tile_name
+  )
+  background_level = max(1.0, float(np.median(other_vals)))
+  focus_separation_ratio = round(peak_sharpness / background_level, 2)
+  background_tile_sharpness = round(background_level, 1)
 
   # 3. Color & Saturation Telemetry
   h_chan = hsv_arr[:, :, 0].astype(np.float32) * (360.0 / 255.0)
@@ -287,21 +415,34 @@ def compute_optical_telemetry(image_path: str) -> dict:
   else:
     teal_orange_index = 0.0
 
-  # 4. In-Focus Subject Micro-Texture
+  # 4. In-Focus Subject Micro-Texture (grain floor removed)
   in_focus_scores = []
   for idx in range(9):
     t_key = f"tile_{idx}_{TILE_LABELS[idx]}"
     if tile_sharpness[t_key] >= max(35.0, 0.25 * peak_sharpness):
       x0, y0, x1, y1 = _tile_box(w, h, idx)
-      sc = _compute_microtexture_score(gray_arr[y0:y1, x0:x1])
+      sc = _compute_microtexture_metrics(gray_arr[y0:y1, x0:x1])
       if sc is not None:
         in_focus_scores.append(sc)
   if in_focus_scores:
-    raw_micro = float(np.mean(in_focus_scores))
+    raw_micro = float(np.mean([s["raw"] for s in in_focus_scores]))
   else:
-    raw_micro = _compute_microtexture_score(gray_arr)
+    whole = _compute_microtexture_metrics(gray_arr)
+    raw_micro = whole["raw"] if whole else None
+  micro_sigma = noise_sigma
+  micro_noise_fraction = (
+      float(min(1.0, (MICROTEXTURE_GRAIN_GAIN * micro_sigma) / raw_micro))
+      if raw_micro
+      else 0.0
+  )
 
   microtexture_score = round(raw_micro, 2) if raw_micro is not None else None
+  # Structural micro-texture: what remains once stochastic grain is accounted for.
+  structural_microtexture = (
+      round(max(0.0, raw_micro - MICROTEXTURE_GRAIN_GAIN * micro_sigma), 2)
+      if raw_micro is not None
+      else None
+  )
   microtexture_status = (
       "measured" if microtexture_score is not None else "insufficient_data"
   )
@@ -326,7 +467,12 @@ def compute_optical_telemetry(image_path: str) -> dict:
     )
   if peak_sharpness < SOFT_FOCUS_THRESHOLD:
     flags.append(
-        f"SOFT_FOCUS_WARNING: Peak tile Laplacian variance is very low ({peak_sharpness:.1f}); image may be blurry."
+        f"SOFT_FOCUS_WARNING: Peak tile structural sharpness is very low ({peak_sharpness:.1f} < {SOFT_FOCUS_THRESHOLD}); image may be blurry."
+    )
+  if noise_fraction > NOISE_MASQUERADE_THRESHOLD and peak_sharpness < SOFT_FOCUS_THRESHOLD:
+    flags.append(
+        f"NOISE_MASQUERADE: {noise_fraction * 100:.0f}% of high-frequency energy is grain "
+        f"(sigma={noise_sigma:.2f}), not detail; this image has no real focus, only noise."
     )
   waxy_floor = (
       WAXY_FLOOR_MACRO if focus_separation_ratio > 25.0 else WAXY_FLOOR_DEFAULT
@@ -362,13 +508,24 @@ def compute_optical_telemetry(image_path: str) -> dict:
       "teal_orange_index": teal_orange_index,
       "teal_orange_threshold": TEAL_ORANGE_THRESHOLD,
       "microtexture_score": microtexture_score,
+      "microtexture_structural": structural_microtexture,
+      "microtexture_noise_sigma": round(micro_sigma, 2),
+      "microtexture_noise_fraction": round(micro_noise_fraction, 2),
       "microtexture_status": microtexture_status,
       "waxy_floor": waxy_floor,
       "global_laplacian_sharpness": round(global_sharpness, 1),
+      "global_raw_laplacian_variance": round(raw_global_sharpness, 1),
+      "noise_sigma": round(noise_sigma, 2),
+      "noise_floor": round(noise_floor, 1),
+      "noise_fraction": round(noise_fraction, 2),
+      "noise_masquerade_threshold": NOISE_MASQUERADE_THRESHOLD,
       "peak_focus_tile": peak_tile_name,
       "peak_tile_sharpness": round(peak_sharpness, 1),
       "focus_separation_ratio": focus_separation_ratio,
+      "background_tile_sharpness": background_tile_sharpness,
       "tile_sharpness": tile_sharpness,
+      "tile_raw_sharpness": tile_raw_sharpness,
+      "tile_noise_sigma": tile_noise_sigma,
       "diagnostic_flags": flags,
       "status": (
           "PASS_AUTOMATED_METRICS"
@@ -396,8 +553,10 @@ def print_telemetry(report: dict, as_json: bool = False):
     print(f"  Midtone Micro-Texture Score   : {report['microtexture_score']} (Waxy floor: {report['waxy_floor']})")
   else:
     print(f"  Midtone Micro-Texture Score   : N/A (insufficient_data; Waxy floor: {report['waxy_floor']})")
-  print(f"  Sharpness (Global / Peak)     : {report['global_laplacian_sharpness']} / {report['peak_tile_sharpness']} ({report['peak_focus_tile']})")
-  print(f"  Focus Separation Ratio        : {report['focus_separation_ratio']}x")
+  print(f"  Structural Micro-Texture      : {report['microtexture_structural']} (grain-corrected; noise {report['microtexture_noise_sigma']})")
+  print(f"  Sharpness (Global / Peak)     : {report['global_laplacian_sharpness']} / {report['peak_tile_sharpness']} ({report['peak_focus_tile']}) [structural]")
+  print(f"  Raw Laplacian Var / Noise     : {report['global_raw_laplacian_variance']} / sigma {report['noise_sigma']} (grain share {report['noise_fraction'] * 100:.0f}%)")
+  print(f"  Focus Separation Ratio        : {report['focus_separation_ratio']}x (vs median background tile {report['background_tile_sharpness']})")
   if report["diagnostic_flags"]:
     print("\n  Diagnostic Flags:")
     for f in report["diagnostic_flags"]:
@@ -594,16 +753,29 @@ def build_diagnostic_board(
   if as_json:
     print(json.dumps(report, indent=2))
   else:
-    print_telemetry(report, as_json=False)
-    print(f"\n  [BOARD] Saved 4-panel Composite Diagnostic Board to: {out_path}")
+    if not QUIET:
+      print_telemetry(report, as_json=False)
+    _log(f"\n  [BOARD] Saved 4-panel Composite Diagnostic Board to: {out_path}")
   return report
 
 
 def tile_image(image_path: str, out_dir: str = None) -> list:
-  """Splits image into 9 full-resolution 3x3 tiles + overview grid (safe down to 1x1)."""
+  """Splits image into 9 full-resolution 3x3 tiles + overview grid.
+
+  Requires at least 3x3 px: a smaller image cannot yield a real 3x3 grid, so it
+  is rejected instead of silently emitting nine identical 1x1 crops.
+  """
   img_path = Path(image_path).resolve()
   if not img_path.exists():
     raise FileNotFoundError(f"Image not found: {img_path}")
+
+  with Image.open(img_path) as _probe:
+    _pw, _ph = _probe.size
+  if _pw < 3 or _ph < 3:
+    raise ValueError(
+        f"Image is too small to tile ({_pw}x{_ph}); a 3x3 grid needs "
+        f"at least 3x3 pixels."
+    )
 
   out_dir = (
       Path(out_dir).resolve()
@@ -646,7 +818,7 @@ def tile_image(image_path: str, out_dir: str = None) -> list:
     overview.save(ov_path, "PNG")
     tile_paths.insert(0, str(ov_path))
 
-  print(f"Generated 9 full-res tiles + overview in: {out_dir}")
+  _log(f"Generated 9 full-res tiles + overview in: {out_dir}")
   return tile_paths
 
 
@@ -660,7 +832,7 @@ def mirror_flip(image_path: str, out_path: str = None) -> str:
   )
   with Image.open(img_path) as im:
     ImageOps.mirror(im.convert("RGB")).save(out_path, "PNG")
-  print(f"Saved horizontal mirror flip to: {out_path}")
+  _log(f"Saved horizontal mirror flip to: {out_path}")
   return str(out_path)
 
 
@@ -712,7 +884,7 @@ def generate_inpaint_mask(
   out_p = Path(out_path).resolve()
   out_p.parent.mkdir(parents=True, exist_ok=True)
   mask.save(out_p, "PNG")
-  print(f"Generated binary inpaint mask ({w}x{h}) at: {out_p}")
+  _log(f"Generated binary inpaint mask ({w}x{h}) at: {out_p}")
   return str(out_p)
 
 
@@ -769,15 +941,25 @@ def _save_with_provenance(
       "generation_metadata": {},
       "history": [],
   }
-  for cand_sc in (out_sidecar, src_sidecar):
-    if cand_sc and cand_sc.exists():
-      try:
-        loaded = json.loads(cand_sc.read_text(encoding="utf-8"))
-        manifest["generation_metadata"] = loaded.get("generation_metadata", {})
-        manifest["history"] = list(loaded.get("history", []))
-        break
-      except Exception:
-        pass
+  # Inherit a prior chain only when the side-car actually links to these source
+  # bytes. A shared stem is not proof: an unrelated or stale side-car must never
+  # graft its history/model metadata onto a different file.
+  for cand_sc in (src_sidecar, out_sidecar):
+    if not cand_sc or not cand_sc.exists():
+      continue
+    try:
+      loaded = json.loads(cand_sc.read_text(encoding="utf-8"))
+    except Exception:
+      continue
+    prior_history = list(loaded.get("history", []) or [])
+    prior_latest = loaded.get("latest_sha256")
+    if not prior_history or not prior_latest or prior_latest != src_sha:
+      continue
+    manifest["generation_metadata"] = dict(
+        loaded.get("generation_metadata", {}) or {}
+    )
+    manifest["history"] = prior_history
+    break
 
   if extra_meta:
     for k, v in extra_meta.items():
@@ -978,7 +1160,7 @@ def crop_image(
             "size": f"{cropped.size[0]}x{cropped.size[1]}",
         },
     )
-  print(
+  _log(
       f"Saved cropped image ({cropped.size[0]}x{cropped.size[1]}) with preserved provenance to: {out_p}"
   )
   return str(out_p)
@@ -1035,7 +1217,7 @@ def adjust_image(
         },
     )
 
-  print(f"Saved optically calibrated image with preserved provenance to: {out_p}")
+  _log(f"Saved optically calibrated image with preserved provenance to: {out_p}")
   return str(out_p)
 
 
@@ -1197,13 +1379,22 @@ def make_contact_sheet(image_paths: list, out_path: str) -> str:
   out_p = Path(out_path).resolve()
   out_p.parent.mkdir(parents=True, exist_ok=True)
   sheet.save(out_p, "PNG")
-  print(f"Contact sheet saved to: {out_p}")
+  _log(f"Contact sheet saved to: {out_p}")
   return str(out_p)
 
 
 def build_parser() -> argparse.ArgumentParser:
   parser = argparse.ArgumentParser(
       description="Optic v2.2 Optical QC, Remediation & Provenance Toolkit"
+  )
+  parser.add_argument(
+      "--version", action="version", version="qc_tools.py 2.2 (Optic)"
+  )
+  parser.add_argument(
+      "-q",
+      "--quiet",
+      action="store_true",
+      help="Suppress human-readable status chatter (keeps stdout machine-readable)",
   )
   subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -1410,8 +1601,16 @@ def build_parser() -> argparse.ArgumentParser:
 def main():
   parser = build_parser()
   args = parser.parse_args()
-  args.handler(args)
+  global QUIET
+  QUIET = bool(getattr(args, "quiet", False))
+  try:
+    args.handler(args)
+  except (FileNotFoundError, ValueError, OSError) as exc:
+    # Expected user-facing failures: one clean line on stderr, exit 1, no traceback.
+    print(f"qc_tools.py: error: {exc}", file=sys.stderr)
+    return 1
+  return 0
 
 
 if __name__ == "__main__":
-  main()
+  sys.exit(main())

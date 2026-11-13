@@ -29,6 +29,7 @@ LEGACY_NAME = "natural-image-craft"
 REPO_ROOT = Path(__file__).resolve().parent
 CORE_ITEMS = [
     "SKILL.md",
+    "AGENTS.md",
     "plugin.json",
     "README.md",
     "requirements.txt",

@@ -93,6 +93,15 @@ If running in an automated background pipeline (CI/CD or headless agent with no 
 - Default to Quick Mode unless configured otherwise.
 - Run `python "<SKILL_DIR>/scripts/qc_tools.py" analyze <image> --json` and include the JSON telemetry in the output.
 
+> **⚠️ The metrics screen; they do not certify.** `PASS_AUTOMATED_METRICS` means no
+> scalar threshold tripped — it is not a quality verdict. The scores are heuristics with
+> no ground-truth calibration. Anatomy, catchlights, contact shadows, glyph legibility,
+> duplicated props, and brief adherence are **not** measurable by these numbers; route
+> them to the human review gate. In headless mode, report the flags you got and say
+> plainly that visual correctness was not verified. Trust `peak_tile_sharpness` /
+> `microtexture_structural` (grain-compensated) over `raw_laplacian_variance` and
+> `microtexture_score`, which are both dominated by noise.
+
 ---
 
 ## 5. Master Workflow (Step-by-Step)

@@ -79,4 +79,4 @@ Would you like to proceed with one of these alternatives?
 ### Step 3: Mandatory Provenance & Disclosure Note
 Every realistic image generated for commercial, public, or publication use must include a standard transparency footer in its delivery report:
 
-> **Provenance & Transparency:** This visual was created with AI generative synthesis (Model: [Model Name], Date: [YYYY-MM-DD]). In compliance with digital authenticity standards (C2PA), this asset should be clearly marked as synthetic media if published in editorial or consumer-facing environments.
+> **Provenance & Transparency:** This visual was created with AI generative synthesis (Model: [Model Name], Date: [YYYY-MM-DD]). Consistent with digital authenticity and C2PA-style provenance conventions, this asset should be disclosed as synthetic media in editorial or consumer contexts (`qc_tools.py provenance` embeds unsigned PNG `tEXt`/`iTXt` metadata and an unsigned SHA-256 audit sidecar rather than signed C2PA CBOR/X.509 manifests).

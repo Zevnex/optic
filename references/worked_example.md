@@ -1,6 +1,6 @@
-# End-to-End Worked Example: Crafting a Production Image (v2.1)
+# End-to-End Worked Example: Crafting a Production Image (v2.2)
 
-This worked example traces a complete generation cycle from raw user brief through delivery report, demonstrating every step, artifact, `qc_tools.py` v2.1 telemetry log, and diagnostic fix.
+This worked example traces a complete generation cycle from raw user brief through delivery report, demonstrating every step, artifact, `qc_tools.py` v2.2 telemetry log, and diagnostic fix.
 
 ---
 
@@ -50,7 +50,7 @@ Illuminated by a single dominant light source: natural morning sunlight streamin
 
 ### Single-Command Composite QC Board & Telemetry (`python "<SKILL_DIR>/scripts/qc_tools.py" board candidate_1.png`)
 ```text
-=== Optical & Physical Telemetry (Natural Image Craft v2.1) ===
+=== Optical & Physical Telemetry (Optic / Natural Image Craft v2.2) ===
   File                          : candidate_1.png
   Dimensions / Aspect           : 1792x1024 (1.75:1)
   Mean Luminance / Contrast     : 118.4 / 49.2
@@ -58,9 +58,9 @@ Illuminated by a single dominant light source: natural morning sunlight streamin
   Interior Blown Highlights     : 0.12% (Global: 0.25%)
   Interior Crushed Shadows      : 0.45% (Global: 0.60%)
   Mean / P95 Saturation         : 48.2 / 142.0 (0-255 scale)
-  Neon Gamut Clipping (S>235)   : 0.0%
-  Teal-Orange Split-Tone Index  : 8.4 (Threshold: 48.0)
-  Midtone Micro-Texture Score   : 2.34 (Waxy floor: 1.6)
+  Neon Gamut Clipping (S>230)   : 0.0%
+  Teal-Orange Split-Tone Index  : 8.4 (Threshold: 30.0)
+  Midtone Micro-Texture Score   : 2.34 (Waxy floor: 1.15)
   Sharpness (Global / Peak)     : 412.6 / 1284.0 (tile_5_mid_right)
   Focus Separation Ratio        : 34.2x
 

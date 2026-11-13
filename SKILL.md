@@ -162,8 +162,8 @@ If running in an automated background pipeline (CI/CD or headless agent with no 
 - If a Critical defect persists at the cap, stop re-rolling and report diagnostic options to the user.
 
 ### Step 10: Optical Polish & Provenance Stamping
-- Use `qc_tools.py adjust` for subtle white-balance or contrast calibration if needed. All Level-1 post-processing tools (`crop`, `adjust`, `text-overlay`) automatically preserve existing EXIF/PNG `tEXt` metadata and append a cryptographically hashed step to `<stem>.provenance.json`.
-- For production assets, stamp C2PA-aligned provenance metadata onto the final image:
+- Use `qc_tools.py adjust` for multiplicative white-balance gain, saturation, or gamma calibration if needed. Level-1 tools (`crop`, `adjust`, `text-overlay`) run at zero generator cost (lossless for PNG output; `quality=95` re-encoded for JPEG), preserve EXIF/ICC/`tEXt` metadata, and append a SHA-256 chained step to `<stem>.provenance.json`.
+- For production assets, stamp C2PA-style unsigned provenance metadata (PNG `tEXt`/`iTXt` chunks + SHA-256 audit sidecar) onto the final image:
   ```bash
   python "<SKILL_DIR>/scripts/qc_tools.py" provenance <image_path> --model "<Model Name>" --seed "<Seed>" --mode "<Quick|Full>"
   ```

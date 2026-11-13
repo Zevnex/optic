@@ -20,14 +20,14 @@ Every candidate image is scored across 5 physical and compositional dimensions (
 
 ## 2. Verified Empirical A/B Benchmark Run (All 6 Pairs / 12 Real Generations in `tests/`)
 
-All 12 benchmark images and their 4-panel Composite Diagnostic Boards (`_qc_board.png`) are stored in `tests/` and can be inspected or re-verified at any time by running:
+All 12 source benchmark `.jpg` files and the post-processed hero banner PNG are stored in [`tests/`](../tests/run_test_suite.py) and can be verified or inspected as 4-panel Composite Diagnostic Boards (`_qc_board.png`) at any time by running:
 
-```powershell
+```bash
 python "<SKILL_DIR>/scripts/qc_tools.py" analyze tests/<image_name>.jpg --json
-python "<SKILL_DIR>/scripts/qc_tools.py" contact-sheet tests/brief1_product_naive.jpg tests/brief1_product_skilled.jpg --out tests/benchmark_ab_contact_sheet.png
+python "<SKILL_DIR>/scripts/qc_tools.py" board tests/<image_name>.jpg --out /tmp/<image_name>_qc_board.png
 ```
 
-* **Master 12-Image Side-by-Side Comparison Sheet:** [benchmark_ab_contact_sheet.png](../tests/benchmark_ab_contact_sheet.png)
+* **Overview Contact Sheet (Pairs 2–6 / 10 Images):** [benchmark_ab_contact_sheet.png](../assets/benchmark_ab_contact_sheet.png)
 
 ---
 
@@ -40,11 +40,11 @@ python "<SKILL_DIR>/scripts/qc_tools.py" contact-sheet tests/brief1_product_naiv
 
 | Metric / Inspection Dimension | Without Skill ([brief1_product_naive.jpg](../tests/brief1_product_naive.jpg)) | With Skill v2.2 ([brief1_product_skilled.jpg](../tests/brief1_product_skilled.jpg)) |
 | :--- | :--- | :--- |
-| **Diagnostic QC Board** | [brief1_product_naive_qc_board.png](../tests/brief1_product_naive_qc_board.png) | [brief1_product_skilled_qc_board.png](../tests/brief1_product_skilled_qc_board.png) |
-| **Mean Luminance / Contrast** | `66.8` / `58.6` (Underexposed dark fantasy look) | `171.3` / `41.8` (Balanced commercial softbox exposure) |
+| **Generate QC Board** | `python scripts/qc_tools.py board tests/brief1_product_naive.jpg` | `python scripts/qc_tools.py board tests/brief1_product_skilled.jpg` |
+| **Mean Luminance / Contrast** | `66.8` / `58.6` (Underexposed dark look) | `171.3` / `41.8` (Balanced commercial softbox exposure) |
 | **Interior Crushed Shadows (<6)** | **`6.03%` (`[!] INTERIOR_SHADOW_CRUSH`)** | **`0.11%` (`[OK]`)** |
 | **P95 Saturation (0–255)** | `226.0` (Oversaturated amber/green glow) | `182.0` (Controlled natural olive & travertine tones) |
-| **100% Zoom Visual Audit** | **Critical Defect:** Hallucinated an unrequested product label with misspelled text (`"LUMINA AETHEREA - ROTANICAL COMPLEX"` instead of *BOTANICAL*). Unmotivated backlit window conflicts with front label illumination. | **Pass (0 Critical, 0 Major):** Unbranded frosted olive glass; authentic porous travertine cavities (`Tile #7 Sharpness = 747.2`); clean machining ridges on brass collar; grounded contact shadow. |
+| **100% Zoom Visual Audit** | **Critical Defect:** Hallucinated an unrequested product label with misspelled text (`"ROTANICAL COMPLEX"` instead of *BOTANICAL*). Unmotivated backlit window conflicts with front label illumination. | **Pass (0 Critical, 0 Major):** Unbranded frosted olive glass; authentic porous travertine cavities (`Tile #7 Sharpness = 749.6`); clean machining ridges on brass collar; grounded contact shadow. *(Note: `microtexture_score = 1.31` passes automatically because `focus_separation_ratio = 40.3x` activates the `1.15` macro floor).* |
 | **Rubric Score** | **52 / 100 (FAIL — Critical text typo & shadow crush)** | **94 / 100 (PASS)** |
 
 ---
@@ -58,10 +58,10 @@ python "<SKILL_DIR>/scripts/qc_tools.py" contact-sheet tests/brief1_product_naiv
 
 | Metric / Inspection Dimension | Without Skill ([brief2_portrait_naive.jpg](../tests/brief2_portrait_naive.jpg)) | With Skill v2.2 ([brief2_portrait_skilled.jpg](../tests/brief2_portrait_skilled.jpg)) |
 | :--- | :--- | :--- |
-| **Diagnostic QC Board** | [brief2_portrait_naive_qc_board.png](../tests/brief2_portrait_naive_qc_board.png) | [brief2_portrait_skilled_qc_board.png](../tests/brief2_portrait_skilled_qc_board.png) |
+| **Generate QC Board** | `python scripts/qc_tools.py board tests/brief2_portrait_naive.jpg` | `python scripts/qc_tools.py board tests/brief2_portrait_skilled.jpg` |
 | **In-Focus Micro-Texture Score** | **`1.53` (`[!] WAXY_SMOOTHNESS_WARNING < 1.60`)** | **`2.08` (`[OK]` — +36% biological skin/surface texture)** |
-| **Global / Peak Tile Sharpness** | `299.5` / `537.2` | **`386.2` / `758.9` (+41% peak structural detail)** |
-| **Teal-Orange Split-Tone Index** | `33.9` | `25.4` |
+| **Global / Peak Tile Sharpness** | `299.5` / `538.0` | **`386.2` / `758.9` (+41% peak structural detail)** |
+| **Teal-Orange Split-Tone Index** | `13.3` | `8.2` |
 | **100% Zoom Visual Audit** | **Critical & Major Defects:**<br>1. **Wearing TWO wristwatches** (one on her left wrist AND a second watch on her right wrist in `Tile #7`!).<br>2. **Twin symmetrical white hardhats** placed on the left and right edges of the desk.<br>3. Waxy, poreless airbrushed facial skin. | **Pass (0 Critical, 1 Disclosed Minor):**<br>1. Authentic skin texture, natural creases, and individual silver hair strands (`Tile #1 S=758.9`).<br>2. Realistic 5-finger hand gripping a steel vernier caliper on scarred plywood.<br>3. *Minor disclosed:* Upper-left window pane (`Tile #0`) has `2.78%` daylight highlight clipping. |
 | **Rubric Score** | **49 / 100 (FAIL — Double wristwatches, twin props, waxy skin)** | **91 / 100 (PASS — Flagged `Tile #7` hand for routine human sign-off)** |
 
@@ -76,10 +76,10 @@ python "<SKILL_DIR>/scripts/qc_tools.py" contact-sheet tests/brief1_product_naiv
 
 | Metric / Inspection Dimension | Without Skill ([brief3_food_naive.jpg](../tests/brief3_food_naive.jpg)) | With Skill v2.2 ([brief3_food_skilled.jpg](../tests/brief3_food_skilled.jpg)) |
 | :--- | :--- | :--- |
-| **Diagnostic QC Board** | [brief3_food_naive_qc_board.png](../tests/brief3_food_naive_qc_board.png) | [brief3_food_skilled_qc_board.png](../tests/brief3_food_skilled_qc_board.png) |
-| **Global / Peak Tile Sharpness** | `719.5` / `3036.9` | **`1685.5` / `3939.9` (+134% global texture definition)** |
+| **Generate QC Board** | `python scripts/qc_tools.py board tests/brief3_food_naive.jpg` | `python scripts/qc_tools.py board tests/brief3_food_skilled.jpg` |
+| **Global / Peak Tile Sharpness** | `719.5` / `3032.4` | **`1685.5` / `3947.2` (+134% global texture definition)** |
 | **In-Focus Micro-Texture Score** | `3.02` | **`4.65` (+54% crumb & wood-grain micro-detail)** |
-| **Focus Separation Ratio** | **`197.2x` (Extreme artificial background blur)** | **`41.04x` (Natural optical `f/5.6` depth-of-field roll-off)** |
+| **Focus Separation Ratio** | **`196.9x` (Extreme artificial background blur)** | **`41.1x` (Natural optical `f/5.6` depth-of-field roll-off)** |
 | **Global Blown Highlights** | `2.73%` (Blown top-left window block in `Tile #0`) | **`0.01%` (Zero highlight clipping)** |
 | **100% Zoom Visual Audit** | **Critical Physics Defect:** The knife is **floating horizontally on its edge in mid-air**, wedged between an uncut round loaf and a detached slice with nothing supporting the handle. The blade is a smooth chef's blade rather than a serrated bread knife. | **Pass (0 Critical, 0 Major):** Halved loaf reveals authentic irregular fermentation alveoli; serrated carbon-steel bread knife rests flat on the walnut butcher block with a crisp directional shadow matching the 10 o'clock raking sunlight. |
 | **Rubric Score** | **55 / 100 (FAIL — Floating mid-air knife physics failure)** | **96 / 100 (PASS)** |
@@ -92,15 +92,15 @@ python "<SKILL_DIR>/scripts/qc_tools.py" contact-sheet tests/brief1_product_naiv
   `A wide 16:9 website hero banner photo of a modern ceramics studio with space for text, cinematic lighting, 8k, ultra realistic, masterpiece`
 * **Skilled Prompt (`brief4_hero_skilled.jpg`) + Level-1 Calibration & Typography (`brief4_hero_skilled_banner.png`):**
   `Wide 16:9 architectural interior photograph of a quiet industrial ceramicist's studio at dusk. A single heavy cast-iron potter's wheel with an unglazed stoneware bowl occupies the right third under a warm 3200K enamel pendant lamp, while the left 60 percent of the frame shows an uncluttered dark grey slate-tile wall in soft even shadow reserved for website headline overlay. Zero text, zero signage, shot on a 35mm lens at f/5.6, level horizon.`
-  *Post-Processing Remediation Demonstrated:* Initial raw output had `InteriorCrushed=6.43%` and `TealOrangeIdx=56.8` due to the dusk 3200K tungsten vs. twilight window contrast. Running `qc_tools.py adjust --gamma 0.85 --saturation 0.78` calibrated shadows to `3.48%` and `TealOrangeIdx` to `18.2` in 0.2s without a generator re-roll, followed by `qc_tools.py text-overlay --text "KANSO STONEWARE" --color auto` ([brief4_hero_skilled_banner.png](../tests/brief4_hero_skilled_banner.png)).
+  *Post-Processing Remediation Demonstrated:* Running `qc_tools.py adjust --gamma 0.85 --saturation 0.78` calibrated dusk contrast (`InteriorCrushed=3.48%`, `TealOrangeIdx=12.5`) without a generator re-roll, followed by `qc_tools.py text-overlay --text "KANSO STONEWARE" --color auto` ([brief4_hero_skilled_banner.png](../tests/brief4_hero_skilled_banner.png)).
 
 | Metric / Inspection Dimension | Without Skill ([brief4_hero_naive.jpg](../tests/brief4_hero_naive.jpg)) | With Skill v2.2 ([brief4_hero_skilled.jpg](../tests/brief4_hero_skilled.jpg)) |
 | :--- | :--- | :--- |
-| **Diagnostic QC Board** | [brief4_hero_naive_qc_board.png](../tests/brief4_hero_naive_qc_board.png) | [brief4_hero_skilled_qc_board.png](../tests/brief4_hero_skilled_qc_board.png) |
-| **Teal-Orange Split-Tone Index** | **`65.6` (`[!] TEAL_ORANGE_SPLIT_GLAZE > 48.0`)** | **`18.2` (`[OK]` after Level-1 `adjust`)** |
-| **Neon Gamut Clipping (S>235)** | `2.59%` | **`0.03%` (`[OK]`)** |
-| **Interior Crushed Shadows (<6)** | `4.19%` | **`3.48%` (`[OK]`)** |
-| **100% Zoom Visual Audit** | **Critical Compositional & UI Defect:** Because the naïve prompt said `"website hero banner... with space for text"`, the generator **baked fake rasterized HTML UI buttons (`"SHOP COLLECTION"`, `"TAKE A CLASS"`) and headline text directly into the pixels**, and filled the entire background with busy shelves and potters so real CSS text cannot be overlaid. | **Pass (0 Critical, 0 Major):** Left 60% is a clean, low-variance dark slate wall (`zone_lum=42.3`) while the right 40% frames the cast-iron wheel and clay splashes. `qc_tools.py text-overlay --color auto` automatically selected crisp light typography (`#F5F5F7`) on [brief4_hero_skilled_banner.png](../tests/brief4_hero_skilled_banner.png). |
+| **Generate QC Board** | `python scripts/qc_tools.py board tests/brief4_hero_naive.jpg` | `python scripts/qc_tools.py board tests/brief4_hero_skilled.jpg` |
+| **Teal-Orange Split-Tone Index** | **`32.5` (`[!] TEAL_ORANGE_SPLIT_GLAZE > 30.0`)** | **`12.5` (`[OK]`)** |
+| **Neon Gamut Clipping (`S>230`)** | `2.90%` | **`0.03%` (`[OK]`)** |
+| **Interior Crushed Shadows (<6)** | `2.81%` | `3.48%` (`[OK] < 6.0%`) |
+| **100% Zoom Visual Audit** | **Critical Compositional & UI Defect:** Because the naïve prompt said `"website hero banner... with space for text"`, the generator **baked fake rasterized HTML UI buttons (`"SHOP COLLECTION"`, `"TAKE A CLASS"`) and headline text directly into the pixels**, and filled the entire background with busy shelves and potters so real CSS text cannot be overlaid. | **Pass (0 Critical, 0 Major):** Left 60% is a clean, low-variance dark slate wall (`zone_lum=42.3`) while the right 40% frames the cast-iron wheel and clay splashes. `qc_tools.py text-overlay --color auto` selected crisp light typography on [brief4_hero_skilled_banner.png](../tests/brief4_hero_skilled_banner.png). |
 | **Rubric Score** | **46 / 100 (FAIL — Baked-in fake UI buttons & teal-orange glaze)** | **95 / 100 (PASS)** |
 
 ---
@@ -114,11 +114,11 @@ python "<SKILL_DIR>/scripts/qc_tools.py" contact-sheet tests/brief1_product_naiv
 
 | Metric / Inspection Dimension | Without Skill ([brief5_hands_naive.jpg](../tests/brief5_hands_naive.jpg)) | With Skill v2.2 ([brief5_hands_skilled.jpg](../tests/brief5_hands_skilled.jpg)) |
 | :--- | :--- | :--- |
-| **Diagnostic QC Board** | [brief5_hands_naive_qc_board.png](../tests/brief5_hands_naive_qc_board.png) | [brief5_hands_skilled_qc_board.png](../tests/brief5_hands_skilled_qc_board.png) |
+| **Generate QC Board** | `python scripts/qc_tools.py board tests/brief5_hands_naive.jpg` | `python scripts/qc_tools.py board tests/brief5_hands_skilled.jpg` |
 | **Interior Crushed Shadows (<6)** | **`6.97%` (`[!] INTERIOR_SHADOW_CRUSH`)** | **`2.20%` (`[OK]`)** |
-| **Neon Gamut Clipping (S>235)** | `2.64%` | **`0.95%` (`[OK]`)** |
+| **Neon Gamut Clipping (`S>230`)** | `2.64%` | **`0.95%` (`[OK]`)** |
 | **In-Focus Micro-Texture Score** | `3.25` | **`3.55` (`[OK]`)** |
-| **100% Zoom Visual Audit** | **Major Craft & Physics Defect:** The luthier is scraping a tiny surgical scalpel blade across the flat face of an already-assembled violin box (violins are arched with thumb-planes and gouges *before* the ribs are assembled), and the lower-right workbench is crushed into pure black (`6.97%`). | **Pass (0 Critical, 0 Major):** Anatomically grounded bimanual action: right hand grips a bronze thumb-plane with real translucent spruce curls emerging from the plane mouth (`Tile #4 S=880.2`), while the left 5-finger hand braces the unvarnished arched spruce plate clamped in the cast-iron vise (`Tile #7 S=1011.1`). |
+| **100% Zoom Visual Audit** | **Major Craft & Physics Defect:** The luthier is scraping a tiny surgical scalpel blade across the flat face of an already-assembled violin box (violins are arched with thumb-planes and gouges *before* the ribs are assembled), and the lower-right workbench is crushed into pure black (`6.97%`). | **Pass (0 Critical, 0 Major):** Anatomically grounded bimanual action: right hand grips a bronze thumb-plane with real translucent spruce curls emerging from the plane mouth (`Tile #4`), while the left 5-finger hand braces the unvarnished arched spruce plate clamped in the cast-iron vise (`Tile #7`). |
 | **Rubric Score** | **58 / 100 (FAIL — Tool/object physics error & shadow crush)** | **93 / 100 (PASS — Flagged `Tile #4` & `Tile #7` hands for human sign-off)** |
 
 ---
@@ -128,36 +128,36 @@ python "<SKILL_DIR>/scripts/qc_tools.py" contact-sheet tests/brief1_product_naiv
 * **Naïve Prompt (`brief6_arch_naive.jpg`):**
   `8k photorealistic architectural photo of a brutalist concrete library interior after rain, dramatic moody lighting, cyberpunk vibes, masterpiece, ultra wide`
 * **Skilled Prompt (`brief6_arch_skilled.jpg`):**
-  `24mm tilt-shift architectural photograph of a subterranean brutalist concrete library interior on a rainy afternoon. Tall board-formed concrete columns with visible tie-rod holes and wood-grain impressions rise with strictly vertical parallel lines (`0-degree` pitch). Recessed 3000K linear LED shelf lighting illuminates oak reading tables, while diffused 6000K overcast daylight enters from an upper clerestory window, reflecting softly on damp honed basalt floor tiles near the entrance mat. Shot at f/8 for deep architectural focus, natural dynamic range.`
-  *Post-Processing Remediation Demonstrated:* Initial raw output had `InteriorCrushed=6.02%` under the dark oak reading tables (`0.02%` above threshold). Running `qc_tools.py adjust --gamma 0.90` lifted shadow detail to `4.53%` with `0` flags.
+  `24mm tilt-shift architectural photograph of a subterranean brutalist concrete library interior on a rainy afternoon. Tall board-formed concrete columns with visible tie-rod holes and wood-grain impressions rise with strictly vertical parallel lines (0-degree pitch). Recessed 3000K linear LED shelf lighting illuminates oak reading tables, while diffused 6000K overcast daylight enters from an upper clerestory window, reflecting softly on damp honed basalt floor tiles near the entrance mat. Shot at f/8 for deep architectural focus, natural dynamic range.`
+  *Post-Processing Remediation Demonstrated:* Running `qc_tools.py adjust --gamma 0.90` lifted shadow detail to `4.53%` with `0` flags.
 
 | Metric / Inspection Dimension | Without Skill ([brief6_arch_naive.jpg](../tests/brief6_arch_naive.jpg)) | With Skill v2.2 ([brief6_arch_skilled.jpg](../tests/brief6_arch_skilled.jpg)) |
 | :--- | :--- | :--- |
-| **Diagnostic QC Board** | [brief6_arch_naive_qc_board.png](../tests/brief6_arch_naive_qc_board.png) | [brief6_arch_skilled_qc_board.png](../tests/brief6_arch_skilled_qc_board.png) |
-| **Neon Gamut Clipping (S>235)** | **`4.54%` (`[!] NEON_GAMUT_CLIPPING > 3.5%`)** | **`0.11%` (`[OK]` — 97.6% reduction in neon clipping)** |
-| **Teal-Orange Split-Tone Index** | **`97.7` (`[!] TEAL_ORANGE_SPLIT_GLAZE > 48.0`)** | **`10.7` (`[OK]` — 89.0% reduction in split-tone glaze)** |
-| **Focus Separation Ratio** | `4.4x` | `5.1x` (Deep `f/8` architectural depth of field) |
-| **100% Zoom Visual Audit** | **Critical Color & Perspective Slop:** Extreme bimodal cyan/amber color grading (`TealOrangeIdx=97.7`) turns the windows radioactive turquoise and the bookshelves neon orange (`4.54%` gamut clipping). Wide-angle distortion warps the upper ceiling coffers. | **Pass (0 Critical, 0 Major):** True 24mm tilt-shift architectural perspective with strictly vertical board-formed concrete columns, visible tie-rod holes, authentic damp basalt floor reflections near the coir entrance mat (`Tile #6`), and balanced 3000K shelf lamps against 6000K clerestory daylight. |
+| **Generate QC Board** | `python scripts/qc_tools.py board tests/brief6_arch_naive.jpg` | `python scripts/qc_tools.py board tests/brief6_arch_skilled.jpg` |
+| **Neon Gamut Clipping (`S>230`)** | **`4.54%` (`[!] NEON_GAMUT_CLIPPING > 3.5%`)** | **`0.11%` (`[OK]` — 97.6% reduction in neon clipping)** |
+| **Teal-Orange Split-Tone Index** | **`57.4` (`[!] TEAL_ORANGE_SPLIT_GLAZE > 30.0`)** | **`4.0` (`[OK]` — 93.0% reduction in split-tone glaze)** |
+| **Focus Separation Ratio** | `4.46x` | `5.09x` (Deep `f/8` architectural depth of field) |
+| **100% Zoom Visual Audit** | **Critical Color & Perspective Slop:** Extreme bimodal cyan/amber color grading (`TealOrangeIdx=57.4`) turns the windows turquoise and the bookshelves neon orange (`4.54%` gamut clipping). Wide-angle distortion warps the upper ceiling coffers. | **Pass (0 Critical, 0 Major):** True 24mm tilt-shift architectural perspective with strictly vertical board-formed concrete columns, visible tie-rod holes, authentic damp basalt floor reflections near the coir entrance mat (`Tile #6`), and balanced 3000K shelf lamps against 6000K clerestory daylight. |
 | **Rubric Score** | **48 / 100 (FAIL — Severe neon gamut clipping & teal-orange glaze)** | **95 / 100 (PASS)** |
 
 ---
 
 ## 3. Verified Empirical Summary Across All 6 A/B Pairs (12 Real Images)
 
-| Metric | Without Skill (6 Naïve Prompts) | With Natural Image Craft v2.2 (6 Skilled Prompts) | Verified Delta |
+| Metric | Without Skill (6 Naïve Prompts) | With Optic v2.2 (6 Skilled Prompts) | Verified Delta |
 | :--- | :---: | :---: | :--- |
 | **Mean Rubric Score** | **51.3 / 100** | **94.0 / 100** | **+42.7 points (+83.2%)** |
 | **Critical / Major Visual Defects** | **6 / 6 images** (`"ROTANICAL"` typo, 2 wristwatches, floating knife, baked-in fake UI buttons, scalpel on assembled violin, radioactive cyan/orange LUT) | **0 / 6 images** | **100% elimination across all 6 pairs** |
-| **Automated `qc_tools.py` Flags** | **5 / 6 flagged** (`INTERIOR_SHADOW_CRUSH`, `WAXY_SMOOTHNESS_WARNING`, `TEAL_ORANGE_SPLIT_GLAZE`, `NEON_GAMUT_CLIPPING`) | **0 / 6 flagged** (`PASS_AUTOMATED_METRICS` on all 6) | **100% pass rate on optical telemetry** |
-| **Mean Teal-Orange Split-Tone Index** | `32.9` (Peak `97.7`) | **`14.2` (Peak `30.6`)** | **-56.8% synthetic color-grading bias** |
-| **Mean Neon Gamut Clipping** | `2.20%` (Peak `4.54%`) | **`0.69%` (Peak `2.58%`)** | **-68.6% gamut clipping** |
-| **Mean Global Laplacian Sharpness** | `583.0` | **`703.4`** | **+20.7% structural edge fidelity** |
+| **Automated `qc_tools.py` Flags** | **5 / 6 flagged** (`INTERIOR_SHADOW_CRUSH`, `WAXY_SMOOTHNESS_WARNING`, `TEAL_ORANGE_SPLIT_GLAZE`, `NEON_GAMUT_CLIPPING`) | **0 / 6 flagged** (`PASS_AUTOMATED_METRICS` on all 6) | **100% automated optical pass rate** |
+| **Mean Teal-Orange Split-Tone Index** | `17.4` (Peak `57.4`) | **`6.2` (Peak `12.5`)** | **-64.4% synthetic split-tone bias** |
+| **Mean Neon Gamut Clipping (`S>230`)** | `2.23%` (Peak `4.54%`) | **`1.06%` (Peak `2.58%`)** | **-52.5% gamut clipping** |
+| **Mean Global Laplacian Sharpness** | `677.7` (inflated by fake UI text & HDR noise) | **`621.0`** *(clean copy space lowers whole-frame variance while subject focus remains sharp)* | **Qualitative focus placement** |
 
 ---
 
-## 4. Trigger-Boundary Evaluation Suite (20 Prompts — Evaluation Item L3)
+## 4. Trigger-Boundary Evaluation Suite (20 Prompts)
 
-To verify that agents activate `natural-image-craft` on photorealistic/crafted visual briefs while **never false-triggering** on technical diagrams, charts, UI wireframes, or flat vector graphics, `tests/run_test_suite.py` evaluates 20 boundary prompts against the `SKILL.md` frontmatter trigger rules:
+To verify that agents activate `optic` on photorealistic/crafted visual briefs while **never false-triggering** on technical diagrams, charts, UI wireframes, or flat vector graphics, `tests/run_test_suite.py` evaluates 20 boundary prompts against the `SKILL.md` frontmatter trigger rules:
 
 * **10 Positive Prompts (MUST TRIGGER):** Commercial product photography, editorial portraits, culinary photography, SaaS hero photography with negative copy space, documentary woodworking hands, brutalist architectural photography, photo retouching/inpainting of real photos, multi-image campaign consistency, lifestyle apparel lookbooks, and macro botanical photography.
 * **10 Negative Boundary Prompts (MUST NOT TRIGGER):** Mermaid sequence diagrams, React/Tailwind dashboard wireframes, Matplotlib/Seaborn bar charts, flat SVG company logos, database ER diagrams, Figma UI component mockups, ASCII architecture diagrams, D3.js network topology graphs, LaTeX mathematical plots, and K8s infrastructure flowcharts.

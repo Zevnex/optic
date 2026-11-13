@@ -8,7 +8,7 @@ This document defines the inspection protocol, capability verification, confiden
 
 Before running inspection, determine your active tool environment:
 
-| Required Capability | Ideal Path (`qc_tools.py` v2.1) | Fallback Path (When CLI/Script Unavailable) |
+| Required Capability | Ideal Path (`qc_tools.py` v2.2) | Fallback Path (When CLI/Script Unavailable) |
 | :--- | :--- | :--- |
 | **Composite 4-Panel Board (Quick Mode)** | `python "<SKILL_DIR>/scripts/qc_tools.py" board <image>` (1 vision tool call for grid + flip + anomaly map + 100% zoom) | Prompt vision model with quadrant bounding coordinates: inspect `[0,0, 0.33,0.33]` to `[0.66,0.66, 1.0,1.0]`. |
 | **Full 3×3 Tiling (Full Mode)** | `python "<SKILL_DIR>/scripts/qc_tools.py" tile <image>` | Zoom into specific high-risk regions manually. |
@@ -58,7 +58,7 @@ Follow this exact sequence for each candidate image:
 
 ### Stage 3: Quantitative Optical Telemetry & Anomaly Heatmap
 - Run `python "<SKILL_DIR>/scripts/qc_tools.py" board <image>` (or `analyze <image> --json`).
-- Check interior subject blown highlights (`< 4.0%`), interior crushed shadows (`< 6.0%`), neon gamut clipping (`< 3.5%`), Teal-Orange split-tone index (`< 48.0`), in-focus micro-texture score (`>= 1.60` or `>= 1.15` on high-separation macro shots), and peak tile Laplacian sharpness (`>= 45.0`).
+- Check interior subject blown highlights (`< 4.0%`), interior crushed shadows (`< 6.0%`), neon gamut clipping (`S>230`, `< 3.5%`), Teal-Orange split-tone index (`< 30.0`), in-focus micro-texture score (`>= 1.60` or `>= 1.15` on high-separation macro shots; skipped on studio sweeps/dark backdrops or `insufficient_data`), and peak tile Laplacian sharpness (`>= 45.0`). Note: edge-residual micro-texture alone cannot distinguish intentionally smooth matte surfaces from denoised skin, so interpret `WAXY_SMOOTHNESS_WARNING` in scene context.
 - Note that clean studio white sweeps (`studio_white_sweep_detected: True`) and studio dark backdrops are automatically excluded from false clipping flags.
 
 ### Stage 4: 3×3 Grid & 100% Native Pixel Zoom Inspection

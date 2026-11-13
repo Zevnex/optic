@@ -1,6 +1,6 @@
 {
   "name": "optic",
-  "description": "Optic (Natural Image Craft v2.2): Production-grade photorealistic image generation, prompt engineering, optical telemetry QC, Level-1 post-processing, and C2PA-aligned provenance tracking for AI agents.",
+  "description": "Optic (Natural Image Craft v2.2): Production-grade photorealistic image generation, prompt engineering, optical telemetry QC, Level-1 post-processing, and C2PA-style unsigned provenance tracking for AI agents.",
   "logo": "assets/logo.svg",
   "suggestedPrompts": [
     "Generate a commercial studio product photograph of an unbranded olive-green serum bottle on travertine stone and run the optical QC board",
